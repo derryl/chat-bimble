@@ -3,7 +3,7 @@ import { sha256, getCookieKeyValue } from './utils';
 
 export async function onRequestPost(context: {
   request: Request;
-  env: { CFP_PASSWORD?: string };
+  env: { CFP_PASSWORD: string };
 }): Promise<Response> {
   const { request, env } = context;
   const body = await request.formData();
@@ -21,8 +21,8 @@ export async function onRequestPost(context: {
       headers: {
         'Set-Cookie': `${cookieKeyValue}; Max-Age=${CFP_COOKIE_MAX_AGE}; Path=/; HttpOnly; Secure`,
         'Cache-Control': 'no-cache',
-        Location: redirectPath
-      }
+        Location: redirectPath,
+      },
     });
   } else {
     // Invalid password. Redirect to login page with error.
@@ -30,8 +30,8 @@ export async function onRequestPost(context: {
       status: 302,
       headers: {
         'Cache-Control': 'no-cache',
-        Location: `${redirectPath}?error=1`
-      }
+        Location: `${redirectPath}?error=1`,
+      },
     });
   }
 }
