@@ -5,7 +5,7 @@ import { getTemplate } from './template';
 export async function onRequest(context: {
   request: Request;
   next: () => Promise<Response>;
-  env: { CFP_PASSWORD?: string };
+  env: { CFP_PASSWORD: string };
 }): Promise<Response> {
   const { request, next, env } = context;
   const { pathname, searchParams } = new URL(request.url);
@@ -23,10 +23,13 @@ export async function onRequest(context: {
     return await next();
   } else {
     // No cookie or incorrect hash in cookie. Redirect to login.
-    return new Response(getTemplate({ redirectPath: pathname, withError: error === '1' }), {
-      headers: {
-        'content-type': 'text/html'
-      }
-    });
+    return new Response(
+      getTemplate({ redirectPath: pathname, withError: error === '1' }),
+      {
+        headers: {
+          'content-type': 'text/html',
+        },
+      },
+    );
   }
 }
