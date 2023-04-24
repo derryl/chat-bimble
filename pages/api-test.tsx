@@ -7,7 +7,7 @@ export default function Hund() {
 
   async function handleClick() {
     try {
-      const res = await fetch('/api/llm_test');
+      const res = await fetch('/api/chat_hole');
       const json = await res.json();
       console.log(json);
       setResponse(json.data);
@@ -22,12 +22,12 @@ export default function Hund() {
 
   return (
     <Layout>
-      <div className="mx-auto flex flex-col gap-4">
+      <div className="mx-auto flex flex-col gap-4 p-6 pt-0">
         <button
           className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
           onClick={handleClick}
         >
-          GET /api/llm_test
+          GET /api/chat_hole
         </button>
         <p>seeing what&apos;s possible to do inside an edge function</p>
         <div className="textarea pretty-code">
