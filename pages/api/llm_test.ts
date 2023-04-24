@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest) {
     );
     console.log({ modelResponse });
 
-    return new Response(JSON.stringify({ modelResponse }), {
+    return new Response(JSON.stringify({ data: modelResponse, error: null }), {
       status: 200,
       headers: {
         'content-type': 'application/json',
@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest) {
   } catch (e) {
     console.error(e);
 
-    return new Response(JSON.stringify({ error: e }), {
+    return new Response(JSON.stringify({ data: null, error: e }), {
       status: 500,
     });
   }
