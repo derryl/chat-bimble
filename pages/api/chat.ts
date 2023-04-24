@@ -62,3 +62,5 @@ export default async function handler(
     res.end();
   }
 }
+
+export const config = { runtime: 'edge' };
