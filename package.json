@@ -1,12 +1,12 @@
 {
-  "name": "gpt4-langchain-pdf-chatbot",
+  "name": "hund-langchain-dev",
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=18"
+    "node": "18.15.0"
   },
   "license": "MIT",
-  "author": "Mayooear<twitter:@mayowaoshin>",
+  "author": "Git Pusher <https://github.com/derryl>",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -23,7 +23,7 @@
     "@radix-ui/react-accordion": "^1.1.1",
     "clsx": "^1.2.1",
     "dotenv": "^16.0.3",
-    "langchain": "0.0.41",
+    "langchain": "0.0.63",
     "lucide-react": "^0.125.0",
     "next": "13.2.3",
     "pdf-parse": "1.1.1",

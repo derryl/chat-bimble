@@ -1,6 +1,6 @@
-import { OpenAIChat } from 'langchain/llms';
+import { OpenAIChat } from 'langchain/llms/openai';
 import { LLMChain, ChatVectorDBQAChain, loadQAChain } from 'langchain/chains';
-import { PineconeStore } from 'langchain/vectorstores';
+import { PineconeStore } from 'langchain/vectorstores/pinecone';
 import { PromptTemplate } from 'langchain/prompts';
 import { CallbackManager } from 'langchain/callbacks';
 
