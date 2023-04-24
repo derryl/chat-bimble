@@ -1,12 +1,12 @@
 {
-  "name": "gpt4-langchain-pdf-chatbot",
+  "name": "hund-langchain-dev",
   "version": "0.1.0",
   "private": true,
   "engines": {
     "node": "18.15.0"
   },
   "license": "MIT",
-  "author": "Mayooear<twitter:@mayowaoshin>",
+  "author": "Git Pusher <https://github.com/derryl>",
   "type": "module",
   "scripts": {
     "dev": "next dev",
