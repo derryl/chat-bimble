@@ -49,24 +49,25 @@ export default function ChatHole() {
       fetchEventSource('/api/chat_hole_streaming', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/event-stream',
         },
         body: JSON.stringify({
           userPrompt,
         }),
         signal: ctrl.signal,
-        onmessage: (event) => {
-          console.log(event);
+        onmessage: (msg) => {
+          console.log(msg);
+          const { data, event } = msg;
 
-          // stream ended
-          if (event.data === '[DONE]') {
+          if (event === 'start') {
+            console.log('stream begun by server');
+          } else if (event === 'end') {
             setIsLoading(false);
             ctrl.abort();
             console.log('stream ended by server');
-          } else if (event.data === '[BEGIN]') {
-            console.log('stream begun by server');
           } else {
-            const data = JSON.parse(event.data);
+            const data = JSON.parse(msg.data);
+
             if (data.modelResponse) {
               setResponse(data.modelResponse);
             }

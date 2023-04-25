@@ -7,66 +7,45 @@ import { OpenAI } from 'langchain/llms/openai';
 import { PromptTemplate } from 'langchain/prompts';
 import { NextApiResponse, NextApiRequest } from 'next';
 
-// export const config = { runtime: 'edge' };
+export const config = { runtime: 'edge' };
 
 const COLLECT_REFERENCES = PromptTemplate.fromTemplate(
   collectWikipediaReferencesPrompt,
 );
 const SUGGEST_MORE = PromptTemplate.fromTemplate(proposeFurtherQuestionsPrompt);
 
-// Purpose of this function is to answer user's prompt, and then suggest follow-up questions
-// or further avenues of exploration for the user to undertake.
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const sendData = (data: string) => {
-    res.write(`data: ${data}\n\n`);
-  };
+// https://vercel.com/docs/concepts/functions/edge-functions/streaming#how-to-stream-data-in-an-edge-function
+export default async function handler(request: NextApiRequest) {
+  const encoder = new TextEncoder();
 
-  try {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-    });
+  const headers = new Headers({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
 
-    sendData('[BEGIN]');
-
-    console.log(req.body);
-
-    // Initialize model
-    const model = new OpenAI({
-      temperature: 0.9,
-      modelName: 'gpt-3.5-turbo', // 'gpt-4'
-    });
-
-    // Answer the initial prompt
-    const userPrompt = req.body?.userPrompt || samplePrompts[0];
-    const modelResponse = await model.call(userPrompt);
-    console.log({ modelResponse });
-    sendData(JSON.stringify({ modelResponse }));
-
-    // Come up with suggested follow-up prompts
-    const suggestMorePrompt = await SUGGEST_MORE.format({
-      modelResponse,
-      userPrompt,
-    });
-    const suggestionsResponse = await model.call(suggestMorePrompt);
-    console.log({ suggestionsResponse });
-    sendData(JSON.stringify({ suggestionsResponse }));
-
-    // Collect Wikipedia references
-    // const collectReferencesPrompt = await COLLECT_REFERENCES.format({
-    //   modelResponse,
-    // });
-    // const referencesResponse = await model.call(collectReferencesPrompt);
-    // console.log({ referencesResponse });
-    // sendData(JSON.stringify({ referencesResponse }));
-  } catch (e) {
-    console.error(e);
-  } finally {
-    sendData('[DONE]');
-    res.end();
+  function sendEventData(
+    controller: ReadableStreamDefaultController,
+    event: string,
+    data: any,
+  ) {
+    controller.enqueue(encoder.encode(`event: ${event}\n`));
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
   }
+
+  const readableStream = new ReadableStream({
+    async start(controller) {
+      console.log('[handler] starter');
+      sendEventData(controller, 'start', 'null');
+
+      sendEventData(controller, 'response', 'model response');
+      sendEventData(controller, 'suggestions', 'model suggestions');
+      sendEventData(controller, 'end', '[DONE]');
+
+      console.log('[handler] stream closed');
+      controller.close();
+    },
+  });
+
+  return new Response(readableStream, { headers });
 }
