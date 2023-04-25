@@ -71,7 +71,7 @@ export default function ChatHole() {
             if (event === 'modelResponse') {
               setResponse(data);
             } else if (event === 'suggestions') {
-              setSuggestions(data);
+              setSuggestions(JSON.parse(data));
             } else if (data.referencesResponse) {
               const references = JSON.parse(data.referencesResponse);
               setReferences(references);

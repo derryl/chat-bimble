@@ -24,6 +24,7 @@ export default async function handler(request: NextApiRequest) {
     Connection: 'keep-alive',
   });
 
+  // Determine prompt. Fallback to default if not provided
   let userPrompt = samplePrompts[0];
   try {
     // @ts-ignore
@@ -59,9 +60,16 @@ export default async function handler(request: NextApiRequest) {
       console.log({ modelResponse });
       sendEventData(controller, 'modelResponse', modelResponse);
 
-      // sendEventData(controller, 'suggestions', 'model suggestions');
-      sendEventData(controller, 'end', '[DONE]');
+      // Come up with suggested follow-up prompts
+      const suggestMorePrompt = await SUGGEST_MORE.format({
+        modelResponse,
+        userPrompt,
+      });
+      const suggestionsResponse = await model.call(suggestMorePrompt);
+      console.log({ suggestionsResponse });
+      sendEventData(controller, 'suggestions', suggestionsResponse);
 
+      sendEventData(controller, 'end', '[DONE]');
       console.log('[handler] stream closed');
       controller.close();
     },
