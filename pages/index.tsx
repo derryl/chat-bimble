@@ -1,5 +1,6 @@
 import Layout from '@/components/layout';
 import LoadingDots from '@/components/ui/LoadingDots';
+import { TextArea } from '@/components/ui/TextArea';
 import styles from '@/styles/Home.module.css';
 import { getRandomPrompt } from '@/utils/getRandomPrompt';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
@@ -131,7 +132,7 @@ export default function ChatHole() {
         <div className="flex justify-between rounded-lg p-5 border-2 border-gray-500">
           <div className="grow-1 pr-6 flex flex-col gap-4">
             <h3 className="font-semibold">User Input</h3>
-            <textarea
+            <TextArea
               disabled={isLoading}
               ref={textAreaRef}
               autoFocus={false}
