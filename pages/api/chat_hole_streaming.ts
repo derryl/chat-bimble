@@ -33,6 +33,8 @@ export default async function handler(
 
     sendData('[BEGIN]');
 
+    console.log(req.body);
+
     // Initialize model
     const model = new OpenAI({
       temperature: 0.9,
@@ -40,7 +42,7 @@ export default async function handler(
     });
 
     // Answer the initial prompt
-    const userPrompt = req.body?.prompt || samplePrompts[0];
+    const userPrompt = req.body?.userPrompt || samplePrompts[0];
     const modelResponse = await model.call(userPrompt);
     console.log({ modelResponse });
     sendData(JSON.stringify({ modelResponse }));
@@ -55,12 +57,12 @@ export default async function handler(
     sendData(JSON.stringify({ suggestionsResponse }));
 
     // Collect Wikipedia references
-    const collectReferencesPrompt = await COLLECT_REFERENCES.format({
-      modelResponse,
-    });
-    const referencesResponse = await model.call(collectReferencesPrompt);
-    console.log({ referencesResponse });
-    sendData(JSON.stringify({ referencesResponse }));
+    // const collectReferencesPrompt = await COLLECT_REFERENCES.format({
+    //   modelResponse,
+    // });
+    // const referencesResponse = await model.call(collectReferencesPrompt);
+    // console.log({ referencesResponse });
+    // sendData(JSON.stringify({ referencesResponse }));
   } catch (e) {
     console.error(e);
   } finally {

@@ -35,12 +35,17 @@ export default function ChatHole() {
     }
 
     setIsLoading(true);
+
+    // Zero the outputs
     setResponse('');
+    setSuggestions([]);
     setReferences([]);
 
     const ctrl = new AbortController();
 
     try {
+      console.log('Asking...', userPrompt);
+
       fetchEventSource('/api/chat_hole_streaming', {
         method: 'POST',
         headers: {
@@ -94,8 +99,24 @@ export default function ChatHole() {
         {/* Header + Controls */}
         <div className="flex justify-between rounded-lg p-5 border-2 border-gray-500">
           <div className="grow-1 pr-6 flex flex-col gap-4">
-            <h3 className="font-semibold">Current Prompt</h3>
-            <p>{defaultUserPrompt}</p>
+            <h3 className="font-semibold">User Input</h3>
+            <textarea
+              disabled={isLoading}
+              ref={textAreaRef}
+              autoFocus={false}
+              rows={1}
+              maxLength={512}
+              id="userInput"
+              name="userInput"
+              placeholder={
+                isLoading
+                  ? 'Waiting for response...'
+                  : 'How do metal detectors work?'
+              }
+              value={userPrompt}
+              onChange={(e) => setUserPrompt(e.target.value)}
+              className={styles.textarea}
+            />
           </div>
           <button
             className="grow-0 justify-self-end bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
