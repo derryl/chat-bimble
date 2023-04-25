@@ -16,6 +16,25 @@ const SUGGEST_MORE = PromptTemplate.fromTemplate(proposeFurtherQuestionsPrompt);
 
 // https://vercel.com/docs/concepts/functions/edge-functions/streaming#how-to-stream-data-in-an-edge-function
 export default async function handler(request: NextApiRequest) {
+  // Determine prompt. Return error if not provided
+  let userPrompt = '';
+
+  try {
+    // @ts-ignore
+    const data = await request.json();
+    if (!data.userPrompt || data.userPrompt === '') {
+      throw new Error('userPrompt is a required field');
+    }
+    userPrompt = data.userPrompt;
+  } catch (e) {
+    console.error(e);
+    return new Response(null, {
+      status: 400,
+      statusText: 'Bad Request',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const encoder = new TextEncoder();
 
   const headers = new Headers({
@@ -24,31 +43,6 @@ export default async function handler(request: NextApiRequest) {
     Connection: 'keep-alive',
   });
 
-  // Determine prompt. Fallback to default if not provided
-  let userPrompt = '';
-  try {
-    // @ts-ignore
-    const data = await request.json();
-    userPrompt = data.userPrompt;
-    if (!userPrompt || userPrompt === '') {
-      throw new Error('userPrompt is a required field');
-    }
-  } catch (readBodyError) {
-    console.error(readBodyError);
-    return new Response(
-      JSON.stringify({
-        error: true,
-        message:
-          "Malformed or missing input: 'userPrompt' parameter is required.",
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-  }
-
-  // Stream helper
   function sendEventData(
     controller: ReadableStreamDefaultController,
     event: string,
