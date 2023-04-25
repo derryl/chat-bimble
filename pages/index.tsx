@@ -1,337 +1,222 @@
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import Layout from '@/components/layout';
+import LoadingDots from '@/components/ui/LoadingDots';
 import styles from '@/styles/Home.module.css';
-import { Message } from '@/types/chat';
+import { getRandomPrompt } from '@/utils/getRandomPrompt';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import Image from 'next/image';
-import ReactMarkdown from 'react-markdown';
-import LoadingDots from '@/components/ui/LoadingDots';
-import { Document } from 'langchain/document';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
+import Link from 'next/link';
+import { useCallback, useRef, useState } from 'react';
 
-const machineStartPrompt = 'Hi, what would you like to know about the Senate\'s proposed "RESTRICT Act"?';
-const defaultUserQuery = 'What can you tell me about the RESTRICT Act?';
+function prettyPrint(obj: Object) {
+  return JSON.stringify(obj, null, 2);
+}
 
-const documentSourceUrl = 'https://www.congress.gov/bill/118th-congress/senate-bill/686';
+const defaultUserPrompt = getRandomPrompt();
 
-export default function Home() {
-  const [query, setQuery] = useState<string>(defaultUserQuery);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [sourceDocs, setSourceDocs] = useState<Document[]>([]);
+type Reference = {
+  title: string;
+  url: string;
+  thumbnail?: string;
+};
+
+export default function ChatHole() {
+  const [response, setResponse] = useState('');
+  const [references, setReferences] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [userPrompt, setUserPrompt] = useState<string>(defaultUserPrompt);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [messageState, setMessageState] = useState<{
-    messages: Message[];
-    pending?: string;
-    history: [string, string][];
-    pendingSourceDocs?: Document[];
-  }>({
-    messages: [
-      {
-        message: machineStartPrompt,
-        type: 'apiMessage',
-      },
-    ],
-    history: [],
-    pendingSourceDocs: [],
-  });
 
-  const { messages, pending, history, pendingSourceDocs } = messageState;
-
-  const messageListRef = useRef<HTMLDivElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    textAreaRef.current?.focus();
-  }, []);
-
-  //handle form submission
-  async function handleSubmit(e: any) {
-    e.preventDefault();
-
-    setError(null);
-
-    if (!query) {
-      alert('Please input a question');
-      return;
+  async function handleSubmit() {
+    if (isLoading) {
+      return false;
     }
 
-    const question = query.trim();
+    setIsLoading(true);
 
-    setMessageState((state) => ({
-      ...state,
-      messages: [
-        ...state.messages,
-        {
-          type: 'userMessage',
-          message: question,
-        },
-      ],
-      pending: undefined,
-    }));
+    // Zero the outputs
+    setResponse('');
+    setSuggestions([]);
+    setReferences([]);
 
-    setLoading(true);
-    setQuery('');
-    setMessageState((state) => ({ ...state, pending: '' }));
+    let streamedResponse = '';
 
     const ctrl = new AbortController();
 
     try {
-      fetchEventSource('/api/chat', {
+      console.log('Asking...', userPrompt);
+      class RetriableError extends Error {}
+      class FatalError extends Error {}
+
+      fetchEventSource('/api/chat_hole_streaming_v2', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          question,
-          history,
+          userPrompt,
         }),
         signal: ctrl.signal,
-        onmessage: (event) => {
-          if (event.data === '[DONE]') {
-            setMessageState((state) => ({
-              history: [...state.history, [question, state.pending ?? '']],
-              messages: [
-                ...state.messages,
-                {
-                  type: 'apiMessage',
-                  message: state.pending ?? '',
-                  sourceDocs: state.pendingSourceDocs,
-                },
-              ],
-              pending: undefined,
-              pendingSourceDocs: undefined,
-            }));
-            setLoading(false);
-            ctrl.abort();
+        // on open
+        async onopen(response) {
+          if (
+            response.ok &&
+            response.headers.get('content-type') === 'text/event-stream'
+          ) {
+            return; // everything's good
+          } else if (
+            response.status >= 400 &&
+            response.status < 500 &&
+            response.status !== 429
+          ) {
+            // throw new FatalError();
+            console.error(response);
+            return;
           } else {
-            const data = JSON.parse(event.data);
-            if (data.sourceDocs) {
-              setMessageState((state) => ({
-                ...state,
-                pendingSourceDocs: data.sourceDocs,
-              }));
-            } else {
-              setMessageState((state) => ({
-                ...state,
-                pending: (state.pending ?? '') + data.data,
-              }));
+            throw new RetriableError();
+          }
+        },
+        onerror(err) {
+          if (err instanceof FatalError) {
+            throw err; // rethrow to stop the operation
+          } else {
+            // do nothing to automatically retry. You can also
+            // return a specific retry interval here.
+          }
+        },
+        // on message
+        onmessage: (msg) => {
+          console.log(msg);
+          const { data, event } = msg;
+
+          if (event === 'start') {
+            console.log('stream begun by server');
+          } else if (event === 'end') {
+            setIsLoading(false);
+            ctrl.abort();
+            console.log('stream ended by server');
+          } else {
+            const data = JSON.parse(msg.data);
+
+            if (event === 'modelResponse') {
+              streamedResponse += data;
+              setResponse(streamedResponse);
+            } else if (event === 'suggestions') {
+              setSuggestions(JSON.parse(data));
+            } else if (data.referencesResponse) {
+              const references = JSON.parse(data.referencesResponse);
+              setReferences(references);
             }
           }
         },
       });
-    } catch (error) {
-      setLoading(false);
+    } catch (err) {
+      ctrl.abort();
+      setIsLoading(false);
       setError('An error occurred while fetching the data. Please try again.');
       console.log('error', error);
     }
   }
 
-  //prevent empty submissions
-  const handleEnter = useCallback(
-    (e: any) => {
-      if (e.key === 'Enter' && query) {
-        handleSubmit(e);
-      } else if (e.key == 'Enter') {
-        e.preventDefault();
-      }
-    },
-    [query],
-  );
-
-  const chatMessages = useMemo(() => {
-    return [
-      ...messages,
-      ...(pending
-        ? [
-            {
-              type: 'apiMessage',
-              message: pending,
-              sourceDocs: pendingSourceDocs,
-            },
-          ]
-        : []),
-    ];
-  }, [messages, pending, pendingSourceDocs]);
-
-  //scroll to bottom of chat
-  useEffect(() => {
-    if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-    }
-  }, [chatMessages]);
-
   return (
-    <>
-      <Layout>
-        <div className="mx-auto flex flex-col gap-4">
-          <h1 className="text-2xl font-bold leading-[1.1] tracking-tighter text-center">
-            Ask about the Senate&rsquo;s RESTRICT Act
-          </h1>
-          <p className="text-center">
-            Source: <a href={documentSourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-500 hover:underline">&quot;S.686 - RESTRICT Act&quot;</a> (55 pages)
-          </p>
-          <main className={styles.main}>
-            <div className={styles.cloud}>
-              <div ref={messageListRef} className={styles.messagelist}>
-                {chatMessages.map((message, index) => {
-                  let icon;
-                  let className;
-                  if (message.type === 'apiMessage') {
-                    icon = (
-                      <Image
-                        src="/bot-image.png"
-                        alt="AI"
-                        width="40"
-                        height="40"
-                        className={styles.boticon}
-                        priority
-                      />
-                    );
-                    className = styles.apimessage;
-                  } else {
-                    icon = (
-                      <Image
-                        src="/usericon.png"
-                        alt="Me"
-                        width="30"
-                        height="30"
-                        className={styles.usericon}
-                        priority
-                      />
-                    );
-                    // The latest message sent by the user will be animated while waiting for a response
-                    className =
-                      loading && index === chatMessages.length - 1
-                        ? styles.usermessagewaiting
-                        : styles.usermessage;
-                  }
-                  return (
-                    <>
-                      <div key={`chatMessage-${index}`} className={className}>
-                        {icon}
-                        <div className={styles.markdownanswer}>
-                          <ReactMarkdown linkTarget="_blank">
-                            {message.message}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                      {message.sourceDocs && (
-                        <div
-                          className="p-5"
-                          key={`sourceDocsAccordion-${index}`}
-                        >
-                          <Accordion
-                            type="single"
-                            collapsible
-                            className="flex-col"
-                          >
-                            {message.sourceDocs.map((doc, index) => (
-                              <div key={`messageSourceDocs-${index}`}>
-                                <AccordionItem value={`item-${index}`}>
-                                  <AccordionTrigger>
-                                    <h3>Source {index + 1}</h3>
-                                  </AccordionTrigger>
-                                  <AccordionContent>
-                                    <ReactMarkdown linkTarget="_blank">
-                                      {doc.pageContent}
-                                    </ReactMarkdown>
-                                    <p className="mt-2">
-                                      <b>Source:</b> {doc.metadata.source}
-                                    </p>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              </div>
-                            ))}
-                          </Accordion>
-                        </div>
-                      )}
-                    </>
-                  );
-                })}
-                {sourceDocs.length > 0 && (
-                  <div className="p-5">
-                    <Accordion type="single" collapsible className="flex-col">
-                      {sourceDocs.map((doc, index) => (
-                        <div key={`SourceDocs-${index}`}>
-                          <AccordionItem value={`item-${index}`}>
-                            <AccordionTrigger>
-                              <h3>Source {index + 1}</h3>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <ReactMarkdown linkTarget="_blank">
-                                {doc.pageContent}
-                              </ReactMarkdown>
-                            </AccordionContent>
-                          </AccordionItem>
-                        </div>
-                      ))}
-                    </Accordion>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className={styles.center}>
-              <div className={styles.cloudform}>
-                <form onSubmit={handleSubmit}>
-                  <textarea
-                    disabled={loading}
-                    onKeyDown={handleEnter}
-                    ref={textAreaRef}
-                    autoFocus={false}
-                    rows={1}
-                    maxLength={512}
-                    id="userInput"
-                    name="userInput"
-                    placeholder={
-                      loading
-                        ? 'Waiting for response...'
-                        : 'What is this legal case about?'
-                    }
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    className={styles.textarea}
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className={styles.generatebutton}
-                  >
-                    {loading ? (
-                      <div className={styles.loadingwheel}>
-                        <LoadingDots color="#000" />
-                      </div>
-                    ) : (
-                      // Send icon SVG in input field
-                      <svg
-                        viewBox="0 0 20 20"
-                        className={styles.svgicon}
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path>
-                      </svg>
-                    )}
-                  </button>
-                </form>
-              </div>
-            </div>
-            {error && (
-              <div className="border border-red-400 rounded-md p-4">
-                <p className="text-red-500">{error}</p>
-              </div>
-            )}
-          </main>
+    <Layout>
+      <div className="chathole mx-auto flex flex-col gap-4 p-6 pt-0">
+        <p>
+          simple GPT interface that answers prompts, and then finds related
+          Wikipedia articles & suggests further questions for the user to ask
+        </p>
+        {/* Header + Controls */}
+        <div className="flex justify-between rounded-lg p-5 border-2 border-gray-500">
+          <div className="grow-1 pr-6 flex flex-col gap-4">
+            <h3 className="font-semibold">User Input</h3>
+            <textarea
+              disabled={isLoading}
+              ref={textAreaRef}
+              autoFocus={false}
+              rows={1}
+              maxLength={512}
+              id="userInput"
+              name="userInput"
+              placeholder={
+                isLoading ? 'Waiting for response...' : defaultUserPrompt
+              }
+              value={userPrompt}
+              onChange={(e) => setUserPrompt(e.target.value)}
+              className={styles.textarea}
+            />
+          </div>
+          <button
+            className="grow-0 justify-self-end bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+            onClick={handleSubmit}
+            disabled={isLoading}
+          >
+            Submit
+          </button>
         </div>
-        <footer className="m-auto p-4">
-          <a href="https://twitter.com/mayowaoshin">
-            Powered by LangChainAI. Demo built by Mayo (Twitter: @mayowaoshin).
-          </a>
-        </footer>
-      </Layout>
-    </>
+
+        {/* Output Area */}
+        <div className="relative p-5 rounded-lg border-2 border-blue-500 flex flex-col gap-4">
+          <h3 className="font-semibold">Base Model Response</h3>
+
+          {isLoading && response.length === 0 ? (
+            <div className={styles.loadingwheel}>
+              <LoadingDots color="#000" />
+            </div>
+          ) : (
+            // <div className="textarea pretty-code">
+            //   <code>
+            //     <pre>{prettyPrint(response)}</pre>
+            //   </code>
+            // </div>
+            <div>
+              <p>{prettyPrint(response)}</p>
+            </div>
+          )}
+        </div>
+
+        {/* You Might Want To Ask */}
+        <div className="relative p-5 rounded-lg border-2 border-red-400 flex flex-col gap-4">
+          <h3 className="font-semibold">Proposed follow-up questions</h3>
+          {isLoading && suggestions.length === 0 ? (
+            <div className={styles.loadingwheel}>
+              <LoadingDots color="#000" />
+            </div>
+          ) : (
+            <div className="flex">
+              <ul className="list-disc">
+                {suggestions.map(({ text }) => {
+                  return <li key={text}>{text}</li>;
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+        {/* References */}
+        <div className="relative p-5 rounded-lg border-2 border-yellow-300 flex flex-col gap-4">
+          <h3 className="font-semibold">Relevant Wikipedia Articles</h3>
+          {isLoading && references.length === 0 ? (
+            <div className={styles.loadingwheel}>
+              <LoadingDots color="#000" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-4">
+              {references.map(({ title, thumbnail, url }) => {
+                return (
+                  <Link key={url} href={url}>
+                    <div className="max-w-sm rounded overflow-hidden shadow-lg">
+                      <div className="px-6 py-4">
+                        <div className="font-bold text-xl mb-2">{title}</div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
   );
 }
