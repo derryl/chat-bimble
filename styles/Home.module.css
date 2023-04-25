@@ -58,8 +58,8 @@
 
 .loadingwheel {
   position: absolute;
-  top: 0.2rem;
-  right: 0.25rem;
+  top: 1rem;
+  right: 1.5rem;
 }
 
 .svgicon {
