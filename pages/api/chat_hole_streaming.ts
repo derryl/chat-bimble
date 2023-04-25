@@ -24,6 +24,16 @@ export default async function handler(request: NextApiRequest) {
     Connection: 'keep-alive',
   });
 
+  let userPrompt = samplePrompts[0];
+  try {
+    // @ts-ignore
+    const data = await request.json();
+    const userPrompt = data.userPrompt || samplePrompts[0];
+  } catch (readBodyError) {
+    console.error(readBodyError);
+  }
+
+  // Stream helper
   function sendEventData(
     controller: ReadableStreamDefaultController,
     event: string,
@@ -33,13 +43,23 @@ export default async function handler(request: NextApiRequest) {
     controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
   }
 
+  // Initialize model
+  const model = new OpenAI({
+    temperature: 0.9,
+    modelName: 'gpt-3.5-turbo', // 'gpt-4'
+  });
+
   const readableStream = new ReadableStream({
     async start(controller) {
-      console.log('[handler] starter');
+      console.log('[handler] started');
       sendEventData(controller, 'start', 'null');
 
-      sendEventData(controller, 'response', 'model response');
-      sendEventData(controller, 'suggestions', 'model suggestions');
+      // Answer the initial prompt
+      const modelResponse = await model.call(userPrompt);
+      console.log({ modelResponse });
+      sendEventData(controller, 'modelResponse', modelResponse);
+
+      // sendEventData(controller, 'suggestions', 'model suggestions');
       sendEventData(controller, 'end', '[DONE]');
 
       console.log('[handler] stream closed');

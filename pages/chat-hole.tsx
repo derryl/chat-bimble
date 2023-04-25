@@ -49,7 +49,7 @@ export default function ChatHole() {
       fetchEventSource('/api/chat_hole_streaming', {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/event-stream',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           userPrompt,
@@ -68,16 +68,13 @@ export default function ChatHole() {
           } else {
             const data = JSON.parse(msg.data);
 
-            if (data.modelResponse) {
-              setResponse(data.modelResponse);
-            }
-            if (data.referencesResponse) {
+            if (event === 'modelResponse') {
+              setResponse(data);
+            } else if (event === 'suggestions') {
+              setSuggestions(data);
+            } else if (data.referencesResponse) {
               const references = JSON.parse(data.referencesResponse);
               setReferences(references);
-            }
-            if (data.suggestionsResponse) {
-              const suggestions = JSON.parse(data.suggestionsResponse);
-              setSuggestions(suggestions);
             }
           }
         },
