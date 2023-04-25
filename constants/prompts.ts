@@ -5,6 +5,21 @@ export const DEFAULT_PROMPT =
 
 export const samplePrompts = [
   'Who were some of the most successful prospectors during the California Gold Rush?',
+  'How does quantum entanglement challenge our understanding of classical physics?',
+  'What factors contributed to the fall of the Mayan civilization?',
+  "How do Shakespeare's tragedies reflect Elizabethan society's values and beliefs?",
+  'What role do extremophiles play in astrobiology and the search for extraterrestrial life?',
+  "How did Cleopatra's reign impact Egypt's relationship with the Roman Empire?",
+  'How do black holes affect the surrounding space-time and nearby celestial bodies?',
+  'How did the Code of Hammurabi shape the development of ancient legal systems?',
+  'What makes the unreliable narrator an effective storytelling device in modern fiction?',
+  'What is the role of epigenetics in the inheritance of acquired traits?',
+  "How did the Great Wall of China impact China's political and cultural development?",
+  'How does the recently discovered ability of some plants to communicate through their root systems alter our understanding of plant intelligence and ecology?',
+  'In what ways did the Silk Road influence the development of Eastern and Western worlds throughout history?',
+  'How might the works of Gabriel García Márquez be seen as a tool for exploring social and political issues?',
+  'How have advancements in gene editing technologies, such as CRISPR-Cas9, impacted our ability to treat genetic diseases and what ethical considerations must be addressed?',
+  'How did the development of the printing press in 15th century Europe influence the spread of knowledge, the democratization of information, and the eventual emergence of the scientific revolution?',
 ];
 
 export const collectWikipediaReferencesPrompt = `The following is an "Answer" you provided to a user's prompt. I would like you to parse your "Answer" for any people, places, or topics which have an associated Wikipedia page. For each Wikipedia page you return, please retrieve Wikipedia page's title and its URL. Your response will be formatted as a JSON Array of Objects. Each Object will correspond to a single Wikipedia page and will have the following fields:

@@ -1,6 +1,7 @@
 import Layout from '@/components/layout';
 import LoadingDots from '@/components/ui/LoadingDots';
 import styles from '@/styles/Home.module.css';
+import { getRandomPrompt } from '@/utils/getRandomPrompt';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,8 +11,7 @@ function prettyPrint(obj: Object) {
   return JSON.stringify(obj, null, 2);
 }
 
-const defaultUserPrompt =
-  'Who were some of the most successful prospectors during the California Gold Rush?';
+const defaultUserPrompt = getRandomPrompt();
 
 type Reference = {
   title: string;
@@ -41,12 +41,16 @@ export default function ChatHole() {
     setSuggestions([]);
     setReferences([]);
 
+    let streamedResponse = '';
+
     const ctrl = new AbortController();
 
     try {
       console.log('Asking...', userPrompt);
+      class RetriableError extends Error {}
+      class FatalError extends Error {}
 
-      fetchEventSource('/api/chat_hole_streaming', {
+      fetchEventSource('/api/chat_hole_streaming_v2', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,6 +59,34 @@ export default function ChatHole() {
           userPrompt,
         }),
         signal: ctrl.signal,
+        // on open
+        async onopen(response) {
+          if (
+            response.ok &&
+            response.headers.get('content-type') === 'text/event-stream'
+          ) {
+            return; // everything's good
+          } else if (
+            response.status >= 400 &&
+            response.status < 500 &&
+            response.status !== 429
+          ) {
+            // throw new FatalError();
+            console.error(response);
+            return;
+          } else {
+            throw new RetriableError();
+          }
+        },
+        onerror(err) {
+          if (err instanceof FatalError) {
+            throw err; // rethrow to stop the operation
+          } else {
+            // do nothing to automatically retry. You can also
+            // return a specific retry interval here.
+          }
+        },
+        // on message
         onmessage: (msg) => {
           console.log(msg);
           const { data, event } = msg;
@@ -69,7 +101,8 @@ export default function ChatHole() {
             const data = JSON.parse(msg.data);
 
             if (event === 'modelResponse') {
-              setResponse(data);
+              streamedResponse += data;
+              setResponse(streamedResponse);
             } else if (event === 'suggestions') {
               setSuggestions(JSON.parse(data));
             } else if (data.referencesResponse) {
@@ -107,9 +140,7 @@ export default function ChatHole() {
               id="userInput"
               name="userInput"
               placeholder={
-                isLoading
-                  ? 'Waiting for response...'
-                  : 'How do metal detectors work?'
+                isLoading ? 'Waiting for response...' : defaultUserPrompt
               }
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
@@ -124,6 +155,7 @@ export default function ChatHole() {
             Submit
           </button>
         </div>
+
         {/* Output Area */}
         <div className="relative p-5 rounded-lg border-2 border-blue-500 flex flex-col gap-4">
           <h3 className="font-semibold">Base Model Response</h3>
@@ -133,10 +165,13 @@ export default function ChatHole() {
               <LoadingDots color="#000" />
             </div>
           ) : (
-            <div className="textarea pretty-code">
-              <code>
-                <pre>{prettyPrint(response)}</pre>
-              </code>
+            // <div className="textarea pretty-code">
+            //   <code>
+            //     <pre>{prettyPrint(response)}</pre>
+            //   </code>
+            // </div>
+            <div>
+              <p>{prettyPrint(response)}</p>
             </div>
           )}
         </div>
