@@ -1,5 +1,6 @@
 import Layout from '@/components/layout';
 import LoadingDots from '@/components/ui/LoadingDots';
+import { TextArea } from '@/components/ui/TextArea';
 import styles from '@/styles/Home.module.css';
 import { getRandomPrompt } from '@/utils/getRandomPrompt';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
@@ -11,19 +12,17 @@ function prettyPrint(obj: Object) {
   return JSON.stringify(obj, null, 2);
 }
 
-const defaultUserPrompt = getRandomPrompt();
-
 type Reference = {
   title: string;
   url: string;
   thumbnail?: string;
 };
 
-export default function ChatHole() {
+export default function ChatHole({ initialPrompt }: { initialPrompt: string }) {
   const [response, setResponse] = useState('');
   const [references, setReferences] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
-  const [userPrompt, setUserPrompt] = useState<string>(defaultUserPrompt);
+  const [userPrompt, setUserPrompt] = useState<string>(initialPrompt);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,20 +70,17 @@ export default function ChatHole() {
             response.status < 500 &&
             response.status !== 429
           ) {
-            // throw new FatalError();
-            console.error(response);
-            return;
+            throw new FatalError();
           } else {
             throw new RetriableError();
           }
         },
+        onclose() {
+          console.log('Connection closed by the server');
+        },
         onerror(err) {
-          if (err instanceof FatalError) {
-            throw err; // rethrow to stop the operation
-          } else {
-            // do nothing to automatically retry. You can also
-            // return a specific retry interval here.
-          }
+          console.error(err);
+          ctrl.abort();
         },
         // on message
         onmessage: (msg) => {
@@ -98,16 +94,21 @@ export default function ChatHole() {
             ctrl.abort();
             console.log('stream ended by server');
           } else {
-            const data = JSON.parse(msg.data);
+            try {
+              const data = JSON.parse(msg.data);
 
-            if (event === 'modelResponse') {
-              streamedResponse += data;
-              setResponse(streamedResponse);
-            } else if (event === 'suggestions') {
-              setSuggestions(JSON.parse(data));
-            } else if (data.referencesResponse) {
-              const references = JSON.parse(data.referencesResponse);
-              setReferences(references);
+              if (event === 'modelResponse') {
+                streamedResponse += data;
+                setResponse(streamedResponse);
+              } else if (event === 'suggestions') {
+                setSuggestions(JSON.parse(data));
+              } else if (data.referencesResponse) {
+                const references = JSON.parse(data.referencesResponse);
+                setReferences(references);
+              }
+            } catch (dataError) {
+              ctrl.abort();
+              throw new FatalError();
             }
           }
         },
@@ -131,7 +132,7 @@ export default function ChatHole() {
         <div className="flex justify-between rounded-lg p-5 border-2 border-gray-500">
           <div className="grow-1 pr-6 flex flex-col gap-4">
             <h3 className="font-semibold">User Input</h3>
-            <textarea
+            <TextArea
               disabled={isLoading}
               ref={textAreaRef}
               autoFocus={false}
@@ -140,7 +141,7 @@ export default function ChatHole() {
               id="userInput"
               name="userInput"
               placeholder={
-                isLoading ? 'Waiting for response...' : defaultUserPrompt
+                isLoading ? 'Waiting for response...' : initialPrompt
               }
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
@@ -219,4 +220,12 @@ export default function ChatHole() {
       </div>
     </Layout>
   );
+}
+
+export async function getServerSideProps() {
+  return {
+    props: {
+      initialPrompt: getRandomPrompt(),
+    },
+  };
 }

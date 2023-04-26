@@ -3,6 +3,10 @@ import {
   proposeFurtherQuestionsPrompt,
   samplePrompts,
 } from '@/constants/prompts';
+import {
+  BaseCallbackHandler,
+  BaseCallbackHandlerInput,
+} from 'langchain/callbacks';
 import { OpenAI } from 'langchain/llms/openai';
 import { PromptTemplate } from 'langchain/prompts';
 import { NextApiResponse, NextApiRequest } from 'next';
@@ -54,40 +58,59 @@ export default async function handler(request: NextApiRequest) {
 
   const readableStream = new ReadableStream({
     async start(controller) {
-      console.log('[handler] started');
+      console.log('[handler] stream started');
       sendEventData(controller, 'start', 'null');
 
+      let modelResponse = '';
+
+      ////////////////////////////////
       // Initialize model
       const model = new OpenAI({
         temperature: 0.9,
-        maxTokens: 150,
+        maxTokens: 50,
         streaming: true,
         modelName: 'gpt-3.5-turbo', // 'gpt-4'
         callbacks: [
           {
             handleLLMNewToken(token: string) {
               console.log({ token });
+              modelResponse += token;
               sendEventData(controller, 'modelResponse', token);
+            },
+            handleLLMStart(llm, prompts, runId) {
+              console.log('LLM start', runId);
+              sendEventData(controller, 'llmStart', { runId });
+            },
+            handleLLMEnd(output, runId) {
+              console.log('LLM end', runId);
+              sendEventData(controller, 'llmEnd', { runId });
+            },
+            handleLLMError(error, runId) {
+              console.error('LLM error', runId);
+              sendEventData(controller, 'llmError', { runId, error });
             },
           },
         ],
       });
-
-      // Answer the initial prompt
-      // const modelResponse = await model.call(userPrompt);
-      // console.log({ modelResponse });
-      // sendEventData(controller, 'modelResponse', modelResponse);
-
       const modelResponseStream = await model.call(userPrompt);
+      console.log('[handler] modelResponse finished');
 
+      //////////////////////////////////
       // Come up with suggested follow-up prompts
-      // const suggestMorePrompt = await SUGGEST_MORE.format({
-      //   modelResponse,
-      //   userPrompt,
-      // });
-      // const suggestionsResponse = await model.call(suggestMorePrompt);
-      // console.log({ suggestionsResponse });
-      // sendEventData(controller, 'suggestions', suggestionsResponse);
+      console.log('[handler] beginning suggestions stream');
+      const suggestionsModel = new OpenAI({
+        temperature: 0.9,
+        modelName: 'gpt-3.5-turbo', // 'gpt-4'
+      });
+      const suggestMorePrompt = await SUGGEST_MORE.format({
+        modelResponse,
+        userPrompt,
+      });
+      const suggestionsResponseSync = await suggestionsModel.call(
+        suggestMorePrompt,
+      );
+      console.log({ suggestionsResponseSync });
+      sendEventData(controller, 'suggestions', suggestionsResponseSync);
 
       sendEventData(controller, 'end', '[DONE]');
       console.log('[handler] stream closed');
