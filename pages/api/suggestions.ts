@@ -3,33 +3,32 @@ import {
   proposeFurtherQuestionsPrompt,
   samplePrompts,
 } from '@/constants/prompts';
-import {
-  BaseCallbackHandler,
-  BaseCallbackHandlerInput,
-} from 'langchain/callbacks';
 import { OpenAI } from 'langchain/llms/openai';
 import { PromptTemplate } from 'langchain/prompts';
 import { NextApiResponse, NextApiRequest } from 'next';
 
 export const config = { runtime: 'edge' };
 
-const COLLECT_REFERENCES = PromptTemplate.fromTemplate(
-  collectWikipediaReferencesPrompt,
-);
 const SUGGEST_MORE = PromptTemplate.fromTemplate(proposeFurtherQuestionsPrompt);
 
 // https://vercel.com/docs/concepts/functions/edge-functions/streaming#how-to-stream-data-in-an-edge-function
 export default async function handler(request: NextApiRequest) {
   // Determine prompt. Return error if not provided
   let userPrompt = '';
+  let modelResponse = '';
 
   try {
     // @ts-ignore
-    const data = await request.json();
-    if (!data.userPrompt || data.userPrompt === '') {
+    const { userPrompt: _userPrompt, modelResponse: _modelResponse } =
+      await request.json();
+    if (!_userPrompt) {
       throw new Error('userPrompt is a required field');
     }
-    userPrompt = data.userPrompt;
+    if (!_modelResponse) {
+      throw new Error('modelResponse is a required field');
+    }
+    userPrompt = _userPrompt;
+    modelResponse = _modelResponse;
   } catch (e) {
     console.error(e);
     return new Response(null, {
@@ -58,59 +57,30 @@ export default async function handler(request: NextApiRequest) {
 
   const readableStream = new ReadableStream({
     async start(controller) {
-      console.log('[handler] stream started');
+      console.log('[handler] started');
       sendEventData(controller, 'start', 'null');
 
-      let modelResponse = '';
-
-      ////////////////////////////////
       // Initialize model
-      const model = new OpenAI({
+      const suggestionsModel = new OpenAI({
         temperature: 0.9,
-        maxTokens: 50,
         streaming: true,
         modelName: 'gpt-3.5-turbo', // 'gpt-4'
         callbacks: [
           {
             handleLLMNewToken(token: string) {
               console.log({ token });
-              modelResponse += token;
-              sendEventData(controller, 'modelResponse', token);
-            },
-            handleLLMStart(llm, prompts, runId) {
-              console.log('LLM start', runId);
-              sendEventData(controller, 'llmStart', { runId });
-            },
-            handleLLMEnd(output, runId) {
-              console.log('LLM end', runId);
-              sendEventData(controller, 'llmEnd', { runId });
-            },
-            handleLLMError(error, runId) {
-              console.error('LLM error', runId);
-              sendEventData(controller, 'llmError', { runId, error });
+              sendEventData(controller, 'suggestions', token);
             },
           },
         ],
       });
-      const modelResponseStream = await model.call(userPrompt);
-      console.log('[handler] modelResponse finished');
 
-      //////////////////////////////////
-      // Come up with suggested follow-up prompts
-      console.log('[handler] beginning suggestions stream');
-      const suggestionsModel = new OpenAI({
-        temperature: 0.9,
-        modelName: 'gpt-3.5-turbo', // 'gpt-4'
-      });
       const suggestMorePrompt = await SUGGEST_MORE.format({
         modelResponse,
         userPrompt,
       });
-      const suggestionsResponseSync = await suggestionsModel.call(
-        suggestMorePrompt,
-      );
-      console.log({ suggestionsResponseSync });
-      sendEventData(controller, 'suggestions', suggestionsResponseSync);
+
+      const suggestionsResponseStream = await suggestionsModel.call(userPrompt);
 
       sendEventData(controller, 'end', '[DONE]');
       console.log('[handler] stream closed');

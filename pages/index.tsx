@@ -12,19 +12,17 @@ function prettyPrint(obj: Object) {
   return JSON.stringify(obj, null, 2);
 }
 
-const defaultUserPrompt = getRandomPrompt();
-
 type Reference = {
   title: string;
   url: string;
   thumbnail?: string;
 };
 
-export default function ChatHole() {
+export default function ChatHole({ initialPrompt }: { initialPrompt: string }) {
   const [response, setResponse] = useState('');
   const [references, setReferences] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
-  const [userPrompt, setUserPrompt] = useState<string>(defaultUserPrompt);
+  const [userPrompt, setUserPrompt] = useState<string>(initialPrompt);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,20 +70,17 @@ export default function ChatHole() {
             response.status < 500 &&
             response.status !== 429
           ) {
-            // throw new FatalError();
-            console.error(response);
-            return;
+            throw new FatalError();
           } else {
             throw new RetriableError();
           }
         },
+        onclose() {
+          console.log('Connection closed by the server');
+        },
         onerror(err) {
-          if (err instanceof FatalError) {
-            throw err; // rethrow to stop the operation
-          } else {
-            // do nothing to automatically retry. You can also
-            // return a specific retry interval here.
-          }
+          console.error(err);
+          ctrl.abort();
         },
         // on message
         onmessage: (msg) => {
@@ -99,16 +94,21 @@ export default function ChatHole() {
             ctrl.abort();
             console.log('stream ended by server');
           } else {
-            const data = JSON.parse(msg.data);
+            try {
+              const data = JSON.parse(msg.data);
 
-            if (event === 'modelResponse') {
-              streamedResponse += data;
-              setResponse(streamedResponse);
-            } else if (event === 'suggestions') {
-              setSuggestions(JSON.parse(data));
-            } else if (data.referencesResponse) {
-              const references = JSON.parse(data.referencesResponse);
-              setReferences(references);
+              if (event === 'modelResponse') {
+                streamedResponse += data;
+                setResponse(streamedResponse);
+              } else if (event === 'suggestions') {
+                setSuggestions(JSON.parse(data));
+              } else if (data.referencesResponse) {
+                const references = JSON.parse(data.referencesResponse);
+                setReferences(references);
+              }
+            } catch (dataError) {
+              ctrl.abort();
+              throw new FatalError();
             }
           }
         },
@@ -141,7 +141,7 @@ export default function ChatHole() {
               id="userInput"
               name="userInput"
               placeholder={
-                isLoading ? 'Waiting for response...' : defaultUserPrompt
+                isLoading ? 'Waiting for response...' : initialPrompt
               }
               value={userPrompt}
               onChange={(e) => setUserPrompt(e.target.value)}
@@ -220,4 +220,12 @@ export default function ChatHole() {
       </div>
     </Layout>
   );
+}
+
+export async function getServerSideProps() {
+  return {
+    props: {
+      initialPrompt: getRandomPrompt(),
+    },
+  };
 }
