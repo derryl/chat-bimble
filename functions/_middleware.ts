@@ -18,10 +18,14 @@ export async function onRequest(context: {
     CFP_ALLOWED_PATHS.includes(pathname) ||
     !env.CFP_PASSWORD
   ) {
+    console.log('auth skipped', Object.keys(env), {
+      'env.CFP_PASSWORD': env.CFP_PASSWORD,
+    });
     // Correct hash in cookie, allowed path, or no password set.
     // Continue to next middleware.
     return await next();
   } else {
+    console.log('auth challenging');
     // No cookie or incorrect hash in cookie. Redirect to login.
     return new Response(
       getTemplate({ redirectPath: pathname, withError: error === '1' }),
