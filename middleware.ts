@@ -50,5 +50,5 @@ export function middleware(req: NextRequest) {
   }
 
   console.info('[skip] User is authorized with correct credentials');
-  // return NextResponse.next();
+  return NextResponse.next();
 }
